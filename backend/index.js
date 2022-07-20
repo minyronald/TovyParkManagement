@@ -11,6 +11,7 @@ const history = require('connect-history-api-fallback');
 const ora = require('ora');
 const CacheEngineLoader = require('./util/cacheEngine');
 const cacheEngine = new CacheEngineLoader();
+const crypto = require('crypto');
 let package = require('../package.json');
 const fs = require('fs');
 const twofactor = require('node-2fa');
@@ -49,10 +50,11 @@ app.use(cors({
 
 app.use(bodyParser.json());
 
-
+const randomkey = crypto.randomBytes(48).toString('hex');
+const randomkey2 = crypto.randomBytes(32).toString('hex');
 app.use(cookieSession({
     name: 'session',
-    keys: ['key1', 'key2'],
+    keys: [randomkey, randomkey2],
     domain: false,
     httpOnly: false
 }));
@@ -533,6 +535,26 @@ function chooseRandom(arr, num) {
     };
     return res;
 }
+
+process.on('exit', () => {
+    db.session.find({ active: true }).then(sessions => {
+        sessions.forEach(session => {
+            session.active = false;
+            session.end = new Date();
+            session.save();
+        });
+    });
+    console.log('Exiting...');
+});
+
+process.on('uncaughtException', function(e) {
+    if (!process.env.preventCrash) {
+        console.log('uncaughtException', e);
+        process.exit(1);
+    }
+    console.log(e);
+})
+
 
 console.log('running on http://localhost:' + process.env.PORT || process.env.port || 8080);
 app.listen(process.env.PORT || process.env.port || 8080)
